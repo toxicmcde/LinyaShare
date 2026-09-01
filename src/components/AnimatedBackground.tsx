@@ -68,6 +68,7 @@ export default function AnimatedBackground({ theme }: { theme?: ThemeConfig }) {
   const animationIdRef = useRef<number>(0)
   const timeRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
+  const viewportRef = useRef({ width: 0, height: 0, dpr: 1 })
   const colorRef = useRef<RGB>({ r: 236, g: 72, b: 153 })
   const reduceMotionRef = useRef(false)
   const enabledRef = useRef((theme?.backgroundType ?? "particles") === "particles")
@@ -145,11 +146,17 @@ export default function AnimatedBackground({ theme }: { theme?: ThemeConfig }) {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    const width = canvas.width
-    const height = canvas.height
+    // Particle positions and mouse coordinates use CSS pixels. Keep those
+    // logical dimensions separate from canvas.width/canvas.height, which are
+    // backing-store pixels and therefore include the device pixel ratio.
+    const { width, height, dpr } = viewportRef.current
+    if (width <= 0 || height <= 0) return
 
-    // Clear
-    ctx.clearRect(0, 0, width, height)
+    // Clear the full backing store without applying the DPR transform, then
+    // restore a deterministic CSS-pixel coordinate system for this frame.
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
     const particles = particlesRef.current
     const tokens = tokensRef.current
@@ -509,13 +516,14 @@ export default function AnimatedBackground({ theme }: { theme?: ThemeConfig }) {
     const width = window.innerWidth
     const height = window.innerHeight
 
-    canvas.width = width * dpr
-    canvas.height = height * dpr
+    canvas.width = Math.round(width * dpr)
+    canvas.height = Math.round(height * dpr)
     canvas.style.width = `${width}px`
     canvas.style.height = `${height}px`
+    viewportRef.current = { width, height, dpr }
 
     const ctx = canvas.getContext("2d")
-    if (ctx) ctx.scale(dpr, dpr)
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
     initParticles(width, height)
   }, [initParticles])
@@ -534,21 +542,37 @@ export default function AnimatedBackground({ theme }: { theme?: ThemeConfig }) {
       typeof window !== "undefined" &&
       !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
 
-    handleResize()
-    window.addEventListener("resize", handleResize)
-    window.addEventListener("mousemove", (e) => {
-      mouseRef.current.x = e.clientX
-      mouseRef.current.y = e.clientY
-    })
-    window.addEventListener("mouseleave", () => {
+    const handleMouseMove = (event: MouseEvent) => {
+      mouseRef.current.x = event.clientX
+      mouseRef.current.y = event.clientY
+    }
+    const handleMouseLeave = () => {
       mouseRef.current.x = -9999
       mouseRef.current.y = -9999
-    })
+    }
+
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    window.addEventListener("mousemove", handleMouseMove)
+    window.addEventListener("mouseleave", handleMouseLeave)
+
+    // ResizeObserver covers layout-driven viewport changes, while
+    // visualViewport handles zoom and mobile viewport changes that do not
+    // consistently produce a normal window resize event in every browser.
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(handleResize)
+      : null
+    resizeObserver?.observe(document.documentElement)
+    window.visualViewport?.addEventListener("resize", handleResize)
 
     draw()
 
     return () => {
       window.removeEventListener("resize", handleResize)
+      window.removeEventListener("mousemove", handleMouseMove)
+      window.removeEventListener("mouseleave", handleMouseLeave)
+      window.visualViewport?.removeEventListener("resize", handleResize)
+      resizeObserver?.disconnect()
       cancelAnimationFrame(animationIdRef.current)
     }
   }, [enabled, handleResize, draw])
