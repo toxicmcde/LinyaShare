@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:host": "next dev -H 0.0.0.0",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
     "build": "next build",
     "start": "node .next/standalone/server.js",
     "start:dev": "next start",
