@@ -7,7 +7,7 @@ import path from 'path';
  */
 const resolvePath = (envPath: string | undefined, fallback: string) => {
   if (!envPath) return path.join(process.cwd(), fallback);
-  return envPath.startsWith('/') ? envPath : path.join(process.cwd(), envPath);
+  return path.isAbsolute(envPath) ? envPath : path.join(process.cwd(), envPath);
 };
 
 export const UPLOAD_DIR = resolvePath(process.env.UPLOAD_DIR, 'data/uploads');

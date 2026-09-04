@@ -382,7 +382,7 @@ export default function AdminFilesPage() {
                             <span className="flex items-center gap-1"><Download className="w-3 h-3" /> {file.downloads} Downloads</span>
                             <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> {file.views} Views</span>
                             <span className="hidden sm:flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(file.createdAt)}</span>
-                            {file.password && <span className="text-primary-400 flex items-center gap-1"><Lock className="w-3 h-3" /> Password</span>}
+                            {file.hasPassword && <span className="text-primary-400 flex items-center gap-1"><Lock className="w-3 h-3" /> Password</span>}
                           </div>
                         </div>
                         {/* Desktop: Show delete button inline */}

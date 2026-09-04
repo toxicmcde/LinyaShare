@@ -22,7 +22,7 @@ type AlbumFile = {
   hasPassword: boolean
   embedUrl?: string
   streamUrl: string
-  shareUrl: string
+  shareUrl?: string
 }
 
 type AlbumInfo = {
@@ -119,7 +119,9 @@ export default function AlbumPageClient({ shareId }: { shareId: string }) {
         } else {
           setError("Gallery not found")
         }
-        if (count) markViewCounted(`a:${shareId}`)
+        // A protected album returns only the password gate here. Count and
+        // remember the view only after the file list is actually unlocked.
+        if (count && Array.isArray(data.files)) markViewCounted(`a:${shareId}`)
       } catch {
         setError("Failed to load gallery")
       }
@@ -142,6 +144,14 @@ export default function AlbumPageClient({ shareId }: { shareId: string }) {
         setError(data.error || "Invalid password")
         return
       }
+      const unlockedRes = await fetch(`/api/albums/${shareId}`, { cache: "no-store" })
+      const unlockedAlbum = await unlockedRes.json()
+      if (!unlockedRes.ok || !unlockedAlbum.files) {
+        setError("Unable to load gallery files")
+        return
+      }
+      setAlbum(unlockedAlbum)
+      markViewCounted(`a:${shareId}`)
       setPasswordVerified(true)
       setNeedsPassword(false)
     } catch {
@@ -196,8 +206,7 @@ export default function AlbumPageClient({ shareId }: { shareId: string }) {
 
   const locked = needsPassword && !passwordVerified
   const unlocked = !needsPassword || passwordVerified
-  const pwParam = password ? `?password=${encodeURIComponent(password)}` : ""
-  const zipUrl = `/api/albums/${shareId}/download${pwParam}`
+  const zipUrl = `/api/albums/${shareId}/download`
 
   return (
     <div className="min-h-screen p-4 sm:p-6 relative">
@@ -425,7 +434,7 @@ export default function AlbumPageClient({ shareId }: { shareId: string }) {
 
                     {file.hasPassword ? (
                       <a
-                        href={file.shareUrl}
+                        href={file.shareUrl || `/s/${file.shareId}`}
                         className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
                         title="Individually password protected — open on single file page"
                       >

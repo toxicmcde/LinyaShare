@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAlbumByShareId, verifyAlbumPassword } from "@/lib/albums";
+import { consumeRateLimit, clearRateLimit, getClientIp } from "@/lib/rate-limit";
+import { setShareGrantCookie } from "@/lib/share-access";
+
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 5 * 60 * 1000;
+const BLOCK_MS = 15 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,13 +20,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Album not found" }, { status: 404 });
     }
 
+    const limitKey = `album-password:${shareId}:${getClientIp(request)}`;
+    const limit = consumeRateLimit(limitKey, MAX_ATTEMPTS, WINDOW_MS, BLOCK_MS);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts" },
+        { status: 429, headers: { "Retry-After": limit.retryAfterSeconds.toString() } }
+      );
+    }
+
     const valid = await verifyAlbumPassword(album, password || "");
     if (!valid) {
       return NextResponse.json({ error: "Invalid password" }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    clearRateLimit(limitKey);
+    const response = NextResponse.json({ success: true });
+    if (album.password) setShareGrantCookie(response, "album", shareId, album.accessVersion);
+    return response;
+  } catch (error) {
+    console.error("Album verification error:", error);
+    return NextResponse.json({ error: "Unable to verify album" }, { status: 500 });
   }
 }

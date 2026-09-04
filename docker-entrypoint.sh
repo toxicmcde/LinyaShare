@@ -39,6 +39,11 @@ esac
 echo "[entrypoint] Provider: ${DATABASE_PROVIDER}"
 echo "[entrypoint] Schema:   ${SCHEMA_FILE}"
 
+# Clear legacy plaintext password columns while they still exist. The following
+# schema push may remove those columns, so this must happen first.
+echo "[entrypoint] Clearing legacy plaintext password values..."
+node /app/scripts/migrate-security.mjs
+
 # Creates/updates tables. Safe to run on every start (idempotent).
 echo "[entrypoint] Applying database schema..."
 npx prisma db push --schema="$SCHEMA_FILE" --skip-generate

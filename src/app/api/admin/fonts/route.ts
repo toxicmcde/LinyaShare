@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/prisma";
 import { CUSTOM_FONTS_DIR } from "@/lib/constants";
 import {
@@ -58,8 +58,7 @@ function slugify(name: string): string {
 }
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -80,8 +79,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -153,8 +151,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

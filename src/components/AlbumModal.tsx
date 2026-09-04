@@ -38,6 +38,7 @@ interface AlbumModalProps {
   album?: AlbumData
   onClose: () => void
   onSaved: (mode: "create" | "edit") => void
+  onPasswordCreated?: (password: string) => void
 }
 
 export default function AlbumModal({
@@ -48,6 +49,7 @@ export default function AlbumModal({
   album,
   onClose,
   onSaved,
+  onPasswordCreated,
 }: AlbumModalProps) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -139,6 +141,7 @@ export default function AlbumModal({
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || "Failed to create album")
+        if (typeof data.album?.password === "string") onPasswordCreated?.(data.album.password)
       } else if (album) {
         const body: Record<string, unknown> = {
           name: name.trim(),
@@ -156,6 +159,7 @@ export default function AlbumModal({
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || "Failed to update album")
+        if (typeof data.password === "string") onPasswordCreated?.(data.password)
       }
 
       onSaved(mode)

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZipArchive } from "archiver";
 import fs from "fs";
 import { auth } from "@/lib/auth";
-import { getAlbumByShareId, verifyAlbumPassword, getAlbumZipEntries, buildZipDisposition, incrementAlbumDownloads } from "@/lib/albums";
+import { getAlbumByShareId, getAlbumZipEntries, buildZipDisposition, incrementAlbumDownloads } from "@/lib/albums";
 import { logStatEvent } from "@/lib/stats";
+import { verifyShareGrant } from "@/lib/share-access";
 
 /**
  * Streaming ZIP of all publicly accessible files of an album.
@@ -27,14 +28,12 @@ export async function GET(
   const isOwner = session?.user && album.userId === (session.user as any).id;
 
   if (album.password && !isOwner) {
-    const password = request.nextUrl.searchParams.get("password");
-    if (!password) {
+    if (!verifyShareGrant(request, "album", shareId, album.accessVersion)) {
       return NextResponse.json({ error: "Password required" }, { status: 401 });
     }
-    const valid = await verifyAlbumPassword(album, password);
-    if (!valid) {
-      return NextResponse.json({ error: "Invalid password" }, { status: 403 });
-    }
+  }
+  if (request.nextUrl.searchParams.has("password")) {
+    return NextResponse.json({ error: "Password query parameters are not supported" }, { status: 400 });
   }
 
   const entries = getAlbumZipEntries(album as any);
@@ -48,7 +47,12 @@ export async function GET(
   // so no duplicate entries are created.
   const usedNames = new Map<string, number>();
   const namedEntries = entries.map((entry) => {
-    const originalName = entry.originalName || "file";
+    // Archive member names are metadata and must never be allowed to create
+    // traversal entries when the ZIP is extracted elsewhere.
+    const originalName = (entry.originalName || "file")
+      .replace(/[\\/]/g, "_")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .trim() || "file";
     const dot = originalName.lastIndexOf(".");
     const stem = dot > 0 ? originalName.slice(0, dot) : originalName;
     const ext = dot > 0 ? originalName.slice(dot) : "";

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireUser } from "@/lib/auth-guards";
 import { createAlbum, getUserAlbums, getAlbumShareUrl } from "@/lib/albums";
 import { isEmbeddableMedia } from "@/lib/utils";
+import { validatePassword } from "@/lib/validation";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
+  const current = await requireUser();
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const userId = (session.user as any).id;
-  const albums = await getUserAlbums(userId);
+  const albums = await getUserAlbums(current.userId);
 
   const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
@@ -54,8 +54,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
+  const current = await requireUser();
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -69,12 +69,18 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(fileIds) || fileIds.length === 0) {
       return NextResponse.json({ error: "At least one file is required" }, { status: 400 });
     }
+    const cleanPassword = password === undefined || password === null || password === ""
+      ? undefined
+      : validatePassword(password)
+    if (password !== undefined && password !== null && password !== "" && !cleanPassword) {
+      return NextResponse.json({ error: "Password must be between 8 and 256 characters" }, { status: 400 });
+    }
 
     const album = await createAlbum({
       name: String(name).trim().slice(0, 100),
       description: description ? String(description).slice(0, 500) : undefined,
-      password: password ? String(password) : undefined,
-      userId: (session.user as any).id,
+      password: cleanPassword,
+      userId: current.userId,
       fileIds,
     });
 
@@ -86,9 +92,11 @@ export async function POST(request: NextRequest) {
         name: album.name,
         shareUrl: getAlbumShareUrl(album.shareId),
         fileCount: album.items.length,
+        password: cleanPassword,
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    console.error("Album creation error:", error);
+    return NextResponse.json({ error: "Unable to create album" }, { status: 500 });
   }
 }

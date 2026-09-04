@@ -188,14 +188,14 @@ services:
     container_name: linyashare
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 ```
 
 ### Port Mapping
 
 | Host | Container | Description |
 |------|-----------|-------------|
-| `3000` | `3000` | Application HTTP |
+| `127.0.0.1:3000` | `3000` | Application HTTP (local host only) |
 
 > [!TIP]
 > Change the host port if 3000 is already in use:
@@ -209,7 +209,7 @@ services:
 ```yaml
 environment:
   - DATABASE_URL=file:/app/data/linyashare.db
-  - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-to-a-random-secret}
+  - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET must be set}
   - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
   - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
   - UPLOAD_DIR=data/uploads
@@ -217,17 +217,21 @@ environment:
   - NODE_ENV=production
   - PORT=3000
   - HOSTNAME=0.0.0.0
+  - TRUSTED_PROXY=false
 ```
 
 > [!WARNING]
-> Always set `NEXTAUTH_SECRET` via a `.env` file or environment variable. The default value is not secure.
+> Always set a unique, random `NEXTAUTH_SECRET` via a `.env` file or environment variable. There is no insecure fallback value.
+
+The default port binding is local-only. If a reverse proxy should reach the container, use the proxy network or bind only to the trusted proxy address.
 
 ### Environment File
 
 Create a `.env` file in the project root:
 
 ```env
-NEXTAUTH_SECRET=your-generated-secret-here
+# Generate with: openssl rand -base64 32
+NEXTAUTH_SECRET=<paste-generated-value-here>
 NEXTAUTH_URL=https://share.example.com
 NEXT_PUBLIC_APP_URL=https://share.example.com
 ```
@@ -277,7 +281,7 @@ networks:
 services:
   linyashare:
     environment:
-      - NEXTAUTH_SECRET=your-super-secret-key
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET must be set}
       - NEXTAUTH_URL=https://share.example.com
       - NEXT_PUBLIC_APP_URL=https://share.example.com
     ports:

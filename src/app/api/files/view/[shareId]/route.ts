@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getFileByShareId } from "@/lib/upload"
 import { logStatEvent } from "@/lib/stats"
+import { consumeRateLimit, getClientIp } from "@/lib/rate-limit"
 
 // Path sanitization for shareId
 function isValidShareId(shareId: string): boolean {
@@ -26,23 +27,31 @@ export async function POST(
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    // View only counts for ACTIVE/claimed files
-    if (file.status !== 'IMPORT') {
-      // Log statistics event (fire-and-forget)
-      logStatEvent("VIEW", { fileId: file.id, userId: file.userId || undefined, size: file.size })
-
-      const { prisma } = await import("@/lib/prisma")
-      const updated = await prisma.file.update({
-        where: { id: file.id },
-        data: { views: { increment: 1 } },
-        select: { views: true },
-      }).catch(() => null) // Ignore errors (non-critical)
-
-      return NextResponse.json({ ok: true, views: updated?.views ?? file.views + 1 })
+    if (file.status !== "ACTIVE") {
+      return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ ok: true, views: file.views })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    // Count at most one view per file/IP per minute. The client-side guard is
+    // only an optimization; this server-side limit is the actual boundary.
+    const viewLimit = consumeRateLimit(`file-view:${shareId}:${getClientIp(request)}`, 1, 60_000, 60_000)
+    if (!viewLimit.allowed) {
+      return NextResponse.json({ ok: true, counted: false, views: file.views })
+    }
+
+    // View only counts for ACTIVE/claimed files
+    // Log statistics event (fire-and-forget)
+    logStatEvent("VIEW", { fileId: file.id, userId: file.userId || undefined, size: file.size })
+
+    const { prisma } = await import("@/lib/prisma")
+    const updated = await prisma.file.update({
+      where: { id: file.id },
+      data: { views: { increment: 1 } },
+      select: { views: true },
+    }).catch(() => null) // Ignore errors (non-critical)
+
+    return NextResponse.json({ ok: true, views: updated?.views ?? file.views + 1 })
+  } catch (error) {
+    console.error("File view error:", error)
+    return NextResponse.json({ error: "Unable to update file statistics" }, { status: 500 })
   }
 }

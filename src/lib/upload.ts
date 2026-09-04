@@ -11,6 +11,7 @@ import { logStatEvent } from './stats';
 import { UPLOAD_DIR, IMPORT_DIR } from './constants'
 import { ensureUserUploadDir, moveImportToUploads, removeFileFromDisk, getImportPath, findFileOnDisk } from './file-storage'
 import { detectFileType, isPotentiallyExecutable, getFileCategory, isSafeInlineType } from './file-security'
+import { validatePassword } from './validation'
 
 // Extended File types for embed fields
 type FileWithEmbed = {
@@ -21,7 +22,6 @@ type FileWithEmbed = {
   type: string;
   size: number;
   password: string | null;
-  plainPassword: string | null;
   userId: string | null;
   downloads: number;
   status: string;
@@ -68,8 +68,13 @@ export async function saveFileChunk(
   const baseDir = targetDir === 'uploads' ? UPLOAD_DIR : IMPORT_DIR;
   await ensureDir(baseDir);
 
-  const filePath = path.join(baseDir, `${uploadId}.tmp`);
-  const flags = chunkIndex === 0 ? 'w' : 'a';
+  if (!UUID_RE.test(uploadId) || !Number.isSafeInteger(chunkIndex) || chunkIndex < 0) {
+    throw new Error('Invalid upload metadata');
+  }
+  const resolvedBase = path.resolve(baseDir);
+  const filePath = path.resolve(resolvedBase, `${uploadId}.tmp`);
+  if (path.dirname(filePath) !== resolvedBase) throw new Error('Invalid upload path');
+  const flags = chunkIndex === 0 ? 'wx' : 'a';
 
   try {
     await pipeline(stream, createWriteStream(filePath, { flags }));
@@ -105,9 +110,13 @@ export async function finalizeUserUpload(
 ) {
   await ensureDir(UPLOAD_DIR);
 
+  if (password !== undefined && !validatePassword(password)) {
+    throw new Error('Password must be between 8 and 256 characters');
+  }
+
   // Only sanitize the disk filename, originalName stays readable
   const safeDiskName = sanitizeFileName(originalName);
-  const tempPath = path.join(UPLOAD_DIR, `${uploadId}.tmp`);
+  const tempPath = resolveUploadTempPath(uploadId);
   const finalName = `${uuidv4()}${path.extname(safeDiskName)}`;
 
   if (!existsSync(tempPath)) {
@@ -164,7 +173,6 @@ export async function finalizeUserUpload(
       shareId,
       userId,
       password: hashedPassword || null,
-      plainPassword: password || null,
       status: 'ACTIVE',
       embedUrl,
       isMediaEmbed: isMedia,
@@ -192,7 +200,10 @@ export async function finalizeImportUpload(
   await ensureDir(IMPORT_DIR);
 
   const safeDiskName = sanitizeFileName(originalName);
-  const tempPath = path.join(IMPORT_DIR, `${uploadId}.tmp`);
+  if (!UUID_RE.test(uploadId)) throw new Error("Invalid upload ID");
+  const importBase = path.resolve(IMPORT_DIR);
+  const tempPath = path.resolve(importBase, `${uploadId}.tmp`);
+  if (path.dirname(tempPath) !== importBase) throw new Error("Invalid upload path");
   const finalName = `${uuidv4()}${path.extname(safeDiskName)}`;
   const finalPath = path.join(IMPORT_DIR, finalName);
 
@@ -357,7 +368,7 @@ export async function deleteFile(fileId: string, userId?: string) {
   const file = await prisma.file.findUnique({ where: { id: fileId } });
   if (!file) throw new Error('File not found');
 
-  if (userId && file.userId && file.userId !== userId) {
+  if (userId && file.userId !== userId) {
     throw new Error('Unauthorized');
   }
 
@@ -413,7 +424,16 @@ export async function getUnclaimedFiles() {
   const resolvedOrphans = (await Promise.all(orphanedOnDisk)).filter(Boolean);
 
   return {
-    claimed: dbImportFiles.map(f => ({ ...f, password: f.plainPassword || undefined })),
+    claimed: dbImportFiles.map(f => ({
+      id: f.id,
+      name: f.name,
+      originalName: f.originalName,
+      size: f.size,
+      type: f.type,
+      status: f.status,
+      createdAt: f.createdAt,
+      userId: f.userId,
+    })),
     orphaned: resolvedOrphans,
   };
 }
@@ -426,4 +446,14 @@ export async function deleteOrphanedFile(fileName: string) {
   const filePath = path.join(IMPORT_DIR, safeName);
   if (!existsSync(filePath)) throw new Error('File not found on disk');
   await unlink(filePath);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function resolveUploadTempPath(uploadId: string): string {
+  if (!UUID_RE.test(uploadId)) throw new Error("Invalid upload ID")
+  const baseDir = path.resolve(UPLOAD_DIR)
+  const candidate = path.resolve(baseDir, `${uploadId}.tmp`)
+  if (path.dirname(candidate) !== baseDir) throw new Error("Invalid upload path")
+  return candidate
 }

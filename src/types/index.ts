@@ -14,7 +14,6 @@ export interface FileWithEmbed {
   type: string
   size: number
   password: string | null
-  plainPassword: string | null
   userId: string | null
   downloads: number
   status: FileStatus
@@ -30,8 +29,6 @@ export interface FileInfo {
   size: number
   shareId: string
   downloads: number
-  password: string | null
-  plainPassword: string | null
   createdAt: Date
   embedUrl: string | null
   isMediaEmbed: boolean
@@ -53,7 +50,7 @@ export interface UnclaimedFile {
 }
 
 export interface UnclaimedFilesResult {
-  claimed: Array<Omit<FileWithEmbed, 'plainPassword'> & { password?: string }>
+  claimed: Array<FileWithEmbed>
   orphaned: UnclaimedFile[]
 }
 

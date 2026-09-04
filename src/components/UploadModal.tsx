@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Upload, X, Check, AlertCircle, UploadCloud, Lock } from "lucide-react"
-import { formatSize, formatSpeed, formatTime, uuidV4 } from "@/lib/utils"
+import { formatSize, formatSpeed, formatTime } from "@/lib/utils"
 import { CHUNK_SIZE } from "@/lib/constants"
 import { FileTypeIcon } from "@/components/FileTypeIcon"
 
@@ -16,7 +16,8 @@ export interface UploadedFileResult {
   type: string
   size: number
   shareUrl: string
-  hasPassword: boolean | null
+  hasPassword: boolean
+  password?: string
 }
 
 interface UploadModalProps {
@@ -116,24 +117,29 @@ export default function UploadModal({ isOpen, onClose, maxUploadBytes, onComplet
   }
 
   async function uploadOneFile(file: File): Promise<UploadedFileResult> {
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-    const uploadId = uuidV4()
-    let data: any = null
+    const sessionRes = await fetch("/api/uploads/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
+    })
+    const sessionData = await sessionRes.json().catch(() => ({}))
+    if (!sessionRes.ok || !sessionData.uploadId) {
+      throw new Error(sessionData?.error || "Unable to start upload")
+    }
+
+    const uploadId = sessionData.uploadId as string
+    const chunkSize = Number(sessionData.chunkSize) || CHUNK_SIZE
+    const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize))
 
     for (let i = 0; i < totalChunks; i++) {
-      const start = i * CHUNK_SIZE
-      const end = Math.min(start + CHUNK_SIZE, file.size)
+      const start = i * chunkSize
+      const end = Math.min(start + chunkSize, file.size)
       const chunk = file.slice(start, end)
-      const isFinal = i === totalChunks - 1
 
       const headers: Record<string, string> = {
         "x-upload-id": uploadId,
         "x-chunk-index": i.toString(),
-        "x-is-final": isFinal ? "true" : "false",
-        "x-filename": file.name,
-        "x-mime-type": file.type,
       }
-      if (password) headers["x-password"] = password
 
       const res = await fetch("/api/upload", {
         method: "POST",
@@ -146,15 +152,18 @@ export default function UploadModal({ isOpen, onClose, maxUploadBytes, onComplet
         throw new Error(errData?.error || `Chunk ${i} failed with status ${res.status}`)
       }
 
-      const json = await res.json().catch(() => null)
-      if (isFinal) data = json
-
       uploadedBytesRef.current += end - start
       speedSamplesRef.current.push({ time: Date.now(), bytes: uploadedBytesRef.current })
     }
 
-    if (!data?.file?.shareId) {
-      throw new Error("Upload incomplete: no file record returned")
+    const finalizeRes = await fetch("/api/upload/finalize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId, password: password || undefined }),
+    })
+    const data = await finalizeRes.json().catch(() => null)
+    if (!finalizeRes.ok || !data?.file?.shareId) {
+      throw new Error(data?.error || "Upload incomplete: no file record returned")
     }
 
     return {
@@ -164,7 +173,8 @@ export default function UploadModal({ isOpen, onClose, maxUploadBytes, onComplet
       type: data.file.type || file.type,
       size: file.size,
       shareUrl: `${window.location.origin}/s/${data.file.shareId}`,
-      hasPassword: data.file.password ? true : null,
+      hasPassword: !!data.file.hasPassword,
+      password: typeof data.password === "string" ? data.password : undefined,
     }
   }
 

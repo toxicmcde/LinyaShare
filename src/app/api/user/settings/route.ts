@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/auth-guards"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { removeFileFromDisk } from "@/lib/file-storage"
+import { validatePassword } from "@/lib/validation"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user) {
+  const current = await requireUser()
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: (session.user as any).id },
+    where: { id: current.userId },
     select: {
       id: true,
       name: true,
@@ -25,19 +26,28 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await auth()
-  if (!session?.user) {
+  const current = await requireUser()
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
     const { name, currentPassword, newPassword } = await request.json()
-    const userId = (session.user as any).id
+    const userId = current.userId
 
     const updateData: any = {}
-    if (name) updateData.name = name
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim()) {
+        return NextResponse.json({ error: "Name is invalid" }, { status: 400 })
+      }
+      updateData.name = name.trim().slice(0, 100)
+    }
 
-    if (currentPassword && newPassword) {
+    if (currentPassword !== undefined || newPassword !== undefined) {
+      const cleanNewPassword = validatePassword(newPassword)
+      if (typeof currentPassword !== "string" || !cleanNewPassword) {
+        return NextResponse.json({ error: "A valid current and new password are required" }, { status: 400 })
+      }
       const user = await prisma.user.findUnique({ where: { id: userId } })
       if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 })
@@ -48,7 +58,12 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 })
       }
 
-      updateData.password = await bcrypt.hash(newPassword, 12)
+      updateData.password = await bcrypt.hash(cleanNewPassword, 12)
+      updateData.sessionVersion = { increment: 1 }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: "No changes provided" }, { status: 400 })
     }
 
     await prisma.user.update({
@@ -63,13 +78,13 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE() {
-  const session = await auth()
-  if (!session?.user) {
+  const current = await requireUser()
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
-    const userId = (session.user as any).id
+    const userId = current.userId
 
     // Delete all files from disk (central path logic, incl. user folder)
     const files = await prisma.file.findMany({ where: { userId } })

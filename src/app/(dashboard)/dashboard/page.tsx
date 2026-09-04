@@ -26,6 +26,7 @@ import type { UploadedFileResult } from "@/components/UploadModal"
 import AlbumModal from "@/components/AlbumModal"
 import type { AlbumData } from "@/components/AlbumModal"
 import AlbumsSection from "@/components/AlbumsSection"
+import OneTimePasswordNotice from "@/components/OneTimePasswordNotice"
 
 // ──────────────────────────────────────────────────────────
 // FILE TYPE FILTER OPTIONS
@@ -188,6 +189,7 @@ export default function DashboardPage() {
   const [albumsLoading, setAlbumsLoading] = useState(true)
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [successFiles, setSuccessFiles] = useState<UploadedFileResult[] | null>(null)
+  const [oneTimePassword, setOneTimePassword] = useState<{ kind: "file" | "album"; password: string } | null>(null)
   const [albumModal, setAlbumModal] = useState<{
     open: boolean
     mode: "create" | "edit"
@@ -199,7 +201,6 @@ export default function DashboardPage() {
   const [storageMax, setStorageMax] = useState(DEFAULT_STORAGE_LIMIT)
   const [editingPasswordId, setEditingPasswordId] = useState<string | null>(null)
   const [editingPassword, setEditingPassword] = useState("")
-  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState<"all" | "name" | "date" | "size">("all")
   const [fileTypeFilter, setFileTypeFilter] = useState<string>("all")
@@ -277,6 +278,7 @@ export default function DashboardPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to update password")
+      if (typeof data.password === "string") setOneTimePassword({ kind: "file", password: data.password })
       toastSuccess("Password updated")
       setEditingPasswordId(null)
       setEditingPassword("")
@@ -774,20 +776,8 @@ export default function DashboardPage() {
                             <Eye className="w-3 h-3" /> {file.views} views
                           </span>
                           {file.hasPassword ? (
-                            <span className="text-primary-400 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                onClick={() => setShowPasswords({ ...showPasswords, [file.id]: !showPasswords[file.id] })}
-                                className="hover:text-white transition-colors"
-                              >
-                                {showPasswords[file.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                              </button>
-                              <button
-                                onClick={() => copyToClipboard(file.password || "", file.id)}
-                                className="hover:text-white transition-colors"
-                                title="Copy password"
-                              >
-                                {showPasswords[file.id] ? (file.password || "") : "••••••"}
-                              </button>
+                            <span className="text-primary-400 flex items-center gap-1">
+                              <Lock className="w-3 h-3" /> Password protected (not displayed)
                             </span>
                           ) : (
                             <span className="text-dark-500">No password</span>
@@ -1086,7 +1076,16 @@ export default function DashboardPage() {
         album={albumModal.album || undefined}
         onClose={() => setAlbumModal((prev) => ({ ...prev, open: false, preselectedFileIds: [] }))}
         onSaved={handleAlbumSaved}
+        onPasswordCreated={(password) => setOneTimePassword({ kind: "album", password })}
       />
+
+      {oneTimePassword && (
+        <OneTimePasswordNotice
+          kind={oneTimePassword.kind}
+          password={oneTimePassword.password}
+          onClose={() => setOneTimePassword(null)}
+        />
+      )}
 
       {/* Confirm Dialog */}
       <ConfirmDialog

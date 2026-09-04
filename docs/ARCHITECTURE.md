@@ -113,7 +113,7 @@ LinyaShare/
 
 ### Upload Flow
 ```
-User → Upload UI → Chunked POST /api/upload → Temp file → finalizeUserUpload() → DB + /data/uploads/
+User → Upload UI → POST /api/uploads/session → ordered chunks at /api/upload → /api/upload/finalize → DB + /data/uploads/
 ```
 
 ### Download Flow  

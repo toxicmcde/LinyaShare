@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
 import { clearAttempts, getBlockRemaining, getClientIp, recordFailure } from "./rate-limit"
+import { normalizeEmail } from "./validation"
 
 class TooManyAttemptsError extends CredentialsSignin {
   constructor() {
@@ -20,11 +21,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, request) {
-        if (!credentials?.email || !credentials?.password) {
+        if (
+          typeof credentials?.email !== "string" ||
+          typeof credentials?.password !== "string" ||
+          !credentials.email ||
+          !credentials.password ||
+          credentials.password.length > 256
+        ) {
           return null
         }
 
-        const email = (credentials.email as string).toLowerCase()
+        const email = normalizeEmail(credentials.email)
+        if (!email) return null
         const key = `${getClientIp(request)}|${email}`
 
         if (getBlockRemaining(key) > 0) {
@@ -49,7 +57,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const passwordMatch = await bcrypt.compare(
-          credentials.password as string,
+          credentials.password,
           user.password
         )
 
@@ -65,6 +73,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
+          sessionVersion: user.sessionVersion,
         }
       },
     }),
@@ -74,14 +83,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id
         token.role = (user as any).role
+        token.sessionVersion = (user as any).sessionVersion
       }
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id
-        ;(session.user as any).role = token.role
+      if (!session.user || typeof token.id !== "string" || typeof token.sessionVersion !== "number") {
+        return { ...session, user: undefined } as any
       }
+
+      const currentUser = await prisma.user.findUnique({ where: { id: token.id } })
+      if (!currentUser || currentUser.sessionVersion !== token.sessionVersion) {
+        return { ...session, user: undefined } as any
+      }
+
+      ;(session.user as any).id = currentUser.id
+      ;(session.user as any).email = currentUser.email
+      ;(session.user as any).name = currentUser.name
+      ;(session.user as any).role = currentUser.role
       return session
     },
   },

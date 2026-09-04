@@ -71,7 +71,7 @@ module.exports = nextConfig
 |--------|-------------|
 | 512 KB chunks | Each upload request is ~512 KB, well below the nginx default `client_max_body_size 1m` |
 | No proxy tuning | nginx/Caddy/Traefik work out of the box, no `client_max_body_size` change required |
-| API Route streaming | `/api/upload` streams chunk bodies directly to disk, no full-file buffering |
+| Authenticated upload sessions | `/api/uploads/session` reserves quota; `/api/upload` accepts ordered chunks and `/api/upload/finalize` assembles them |
 | Server Actions | Not used for uploads, so `bodySizeLimit` does not matter here |
 
 #### Upload limits reference
@@ -80,7 +80,7 @@ module.exports = nextConfig
 |-----------|-------|------------|
 | Next.js Server Action | `1mb` default | Not used for uploads |
 | nginx `client_max_body_size` | `1m` default | 512 KB chunks fit without changes |
-| Cloudflare (free) | 100 MB | Chunked uploads bypass this entirely |
+| Cloudflare (free) | 100 MB | Chunked uploads keep each request below this limit |
 
 ```bash
 # Optional: only needed if you ever increase the chunk size (src/lib/constants.ts)

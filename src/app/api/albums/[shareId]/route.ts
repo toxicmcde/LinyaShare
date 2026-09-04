@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireUser } from "@/lib/auth-guards";
 import { getAlbumByShareId, updateAlbum, deleteAlbum, incrementAlbumViews } from "@/lib/albums";
 import { isEmbeddableMedia } from "@/lib/utils";
 import { MAX_EMBED_SIZE } from "@/lib/constants";
+import { verifyShareGrant } from "@/lib/share-access";
+import { validatePassword } from "@/lib/validation";
 
 export async function GET(
   request: NextRequest,
@@ -15,12 +18,18 @@ export async function GET(
     return NextResponse.json({ exists: false });
   }
 
+  const session = await auth();
+  const isOwner = !!session?.user && album.userId === (session.user as any).id;
+  if (album.password && !isOwner && !verifyShareGrant(request, "album", shareId, album.accessVersion)) {
+    return NextResponse.json({ exists: true, shareId, hasPassword: true });
+  }
+
   const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
-  const files = album.items.map((i) => {
+  const files = album.items.filter((i) => i.file.status === "ACTIVE").map((i) => {
     const file = i.file;
     const embedUrl =
-      file.isMediaEmbed && !file.password && file.size < MAX_EMBED_SIZE
+      !album.password && file.isMediaEmbed && !file.password && file.size < MAX_EMBED_SIZE
         ? `${baseUrl}/api/files/embed/${file.shareId}/${encodeURIComponent(file.originalName)}`
         : undefined;
     return {
@@ -33,8 +42,10 @@ export async function GET(
       views: file.views,
       hasPassword: !!file.password,
       embedUrl,
-      streamUrl: `/api/files/stream/${file.shareId}`,
-      shareUrl: `${baseUrl}/s/${file.shareId}`,
+      streamUrl: `/api/albums/${album.shareId}/files/${file.shareId}`,
+      // Do not expose a direct public file link for unprotected files inside
+      // a protected album; the album-scoped route is the access boundary.
+      shareUrl: !album.password ? `${baseUrl}/s/${file.shareId}` : undefined,
     };
   });
 
@@ -67,16 +78,22 @@ export async function GET(
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ shareId: string }> }) {
-  const session = await auth();
-  if (!session?.user) {
+  const current = await requireUser();
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const { shareId } = await params;
     const body = await request.json();
+    const cleanPassword = body.password === undefined || body.password === null || body.password === ""
+      ? body.password === undefined ? undefined : null
+      : validatePassword(body.password)
+    if (body.password !== undefined && body.password !== null && body.password !== "" && !cleanPassword) {
+      return NextResponse.json({ error: "Password must be between 8 and 256 characters" }, { status: 400 });
+    }
 
-    const album = await updateAlbum(shareId, (session.user as any).id, {
+    const album = await updateAlbum(shareId, current.userId, {
       name: body.name !== undefined ? String(body.name).trim().slice(0, 100) : undefined,
       description:
         body.description !== undefined
@@ -84,7 +101,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             ? null
             : String(body.description).slice(0, 500)
           : undefined,
-      password: body.password !== undefined ? (body.password ? String(body.password) : null) : undefined,
+      password: body.password !== undefined ? cleanPassword : undefined,
       addFileIds: Array.isArray(body.addFileIds) ? body.addFileIds : undefined,
       removeFileIds: Array.isArray(body.removeFileIds) ? body.removeFileIds : undefined,
     });
@@ -92,9 +109,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({
       success: true,
       fileCount: album.items.length,
+      password: cleanPassword,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    console.error("Album update error:", error);
+    return NextResponse.json({ error: "Unable to update album" }, { status: 500 });
   }
 }
 
@@ -102,16 +121,17 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ shareId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const current = await requireUser();
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const { shareId } = await params;
-    await deleteAlbum(shareId, (session.user as any).id);
+    await deleteAlbum(shareId, current.userId);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    console.error("Album deletion error:", error);
+    return NextResponse.json({ error: "Unable to delete album" }, { status: 500 });
   }
 }

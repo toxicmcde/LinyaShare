@@ -1,25 +1,38 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/auth-guards"
 import { getUnclaimedFiles, claimFile, claimOrphanedFile, deleteFile, deleteOrphanedFile } from "@/lib/upload"
 
+function fileResponse(file: any) {
+  return {
+    id: file.id,
+    name: file.name,
+    originalName: file.originalName,
+    type: file.type,
+    size: file.size,
+    shareId: file.shareId,
+    userId: file.userId,
+    status: file.status,
+    createdAt: file.createdAt,
+    hasPassword: !!file.password,
+  }
+}
+
 export async function GET() {
-  const session = await auth()
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
     const result = await getUnclaimedFiles()
     return NextResponse.json(result)
-  } catch (error: any) {
+  } catch (error) {
     console.error("Failed to fetch unclaimed files:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Unable to load import files" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth()
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -33,23 +46,22 @@ export async function POST(request: NextRequest) {
     if (fileId) {
       // Assign the existing DB import entry
       const file = await claimFile(fileId, userId)
-      return NextResponse.json({ success: true, file })
+      return NextResponse.json({ success: true, file: fileResponse(file) })
     } else if (fileName) {
       // Assign orphaned disk file (new DB entry)
       const file = await claimOrphanedFile(fileName, userId)
-      return NextResponse.json({ success: true, file })
+      return NextResponse.json({ success: true, file: fileResponse(file) })
     } else {
       return NextResponse.json({ error: "fileId or fileName is required" }, { status: 400 })
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("Claim file failed:", error)
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ error: "Unable to assign import file" }, { status: 400 })
   }
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await auth()
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -67,8 +79,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Delete failed:", error)
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ error: "Unable to delete import file" }, { status: 400 })
   }
 }

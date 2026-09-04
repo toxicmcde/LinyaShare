@@ -16,6 +16,9 @@ export async function GET(
     if (!file) {
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
+    if (file.status !== "ACTIVE") {
+      return NextResponse.json({ error: "File not found" }, { status: 404 })
+    }
 
     // Load theme accent colors (already 30% darkened → better readability)
     const { accentFrom, accentTo, siteName } = await loadOgAccents()
@@ -63,8 +66,9 @@ export async function GET(
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    console.error("File OG error:", error)
+    return NextResponse.json({ error: "Unable to generate preview" }, { status: 500 })
   }
 }
 

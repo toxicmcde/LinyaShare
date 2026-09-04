@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { CheckCircle2, Copy, Check, X, Link2, Images } from "lucide-react"
+import { CheckCircle2, Copy, Check, X, Link2, Images, Lock } from "lucide-react"
 import { formatSize } from "@/lib/utils"
 import { FileTypeIcon } from "@/components/FileTypeIcon"
 import type { UploadedFileResult } from "@/components/UploadModal"
@@ -108,10 +108,23 @@ export default function UploadSuccessPopup({ isOpen, files, onClose, onCreateAlb
                       className="accent-primary-500 w-4 h-4 shrink-0"
                     />
                     <FileTypeIcon type={file.type} name={file.originalName} className="w-4 h-4 text-primary-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{file.originalName}</p>
-                      <p className="text-xs text-dark-400">{formatSize(file.size)}</p>
-                    </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{file.originalName}</p>
+                        <p className="text-xs text-dark-400">{formatSize(file.size)}</p>
+                        {file.password && (
+                          <div className="flex items-center gap-1.5 mt-1 text-xs text-primary-300">
+                            <Lock className="w-3 h-3 shrink-0" />
+                            <span className="truncate">Password: {file.password}</span>
+                            <button
+                              onClick={() => copyText(file.password || "", `${file.shareId}:password`)}
+                              className="text-primary-400 hover:text-white shrink-0"
+                              title="Copy password"
+                            >
+                              {copiedId === `${file.shareId}:password` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     <button
                       onClick={() => copyText(file.shareUrl, file.shareId)}
                       className="btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1.5 min-h-[36px]"

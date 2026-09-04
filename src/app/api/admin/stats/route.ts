@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/auth-guards"
 import { prisma } from "@/lib/prisma"
 
 const pad = (n: number) => n.toString().padStart(2, "0")
@@ -9,8 +9,7 @@ function dayKey(d: Date): string {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await auth()
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

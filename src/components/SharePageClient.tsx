@@ -168,10 +168,10 @@ export default function SharePageClient({ shareId }: SharePageClientProps) {
     if (!shareId) return null
     // If no password needed → direct stream
     if (!needsPassword || passwordVerified) {
-      return `/api/files/stream/${shareId}${password ? `?password=${encodeURIComponent(password)}` : ''}`
+      return `/api/files/stream/${shareId}`
     }
     return null
-  }, [shareId, needsPassword, passwordVerified, password])
+  }, [shareId, needsPassword, passwordVerified])
 
   // Streaming-Preview aktivieren
   useEffect(() => {
@@ -226,6 +226,9 @@ export default function SharePageClient({ shareId }: SharePageClientProps) {
 
       // Password correct → enable streaming preview
       // and count the view (only after successful unlock)
+      const infoRes = await fetch(`/api/files/info/${shareId}`, { cache: "no-store" })
+      const info = await infoRes.json()
+      if (infoRes.ok && info.exists) setFileInfo(info)
       countView()
       setPasswordVerified(true)
       setNeedsPassword(false) // streaming no longer needs the password
@@ -259,8 +262,7 @@ export default function SharePageClient({ shareId }: SharePageClientProps) {
       }
 
       // Build the download URL (stream endpoint with ?download=1)
-      const pwParam = password ? `&password=${encodeURIComponent(password)}` : ""
-      const downloadUrl = `/api/files/stream/${shareId}?download=1${pwParam}`
+      const downloadUrl = `/api/files/stream/${shareId}?download=1`
 
       // Use the native browser download → no RAM usage!
       const a = document.createElement("a")

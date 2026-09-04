@@ -77,7 +77,8 @@ DATABASE_URL="file:./linyashare.db"
 | Type | Base64-encoded random string |
 
 ```env
-NEXTAUTH_SECRET="generate-a-random-secret-here"
+# Generate with: openssl rand -base64 32
+NEXTAUTH_SECRET="<generated random value>"
 ```
 
 Used to encrypt JWT tokens and session cookies. **Must be kept secret.**
@@ -227,7 +228,8 @@ sequenceDiagram
 
 ```env
 DATABASE_URL="file:./linyashare.db"
-NEXTAUTH_SECRET="my-dev-secret-change-me"
+# Generate with: openssl rand -base64 32
+NEXTAUTH_SECRET="<generated random value>"
 NEXTAUTH_URL="http://localhost:3000"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 UPLOAD_DIR="data/uploads"
@@ -238,7 +240,8 @@ IMPORT_DIR="data/import"
 
 ```env
 DATABASE_URL="file:./linyashare.db"
-NEXTAUTH_SECRET="u3H8gR9kL2mN5pQ7rT1vX4zA6cD9fG0jK2lM4nP6rS"
+# Generate with: openssl rand -base64 32
+NEXTAUTH_SECRET="<generated random value>"
 NEXTAUTH_URL="https://share.example.com"
 NEXT_PUBLIC_APP_URL="https://share.example.com"
 UPLOAD_DIR="/var/data/linyashare/uploads"

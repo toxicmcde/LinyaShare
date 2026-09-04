@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { mkdir, readdir, writeFile, unlink, readFile, chmod } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -87,8 +87,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -119,8 +118,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE() {
-  const session = await auth();
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

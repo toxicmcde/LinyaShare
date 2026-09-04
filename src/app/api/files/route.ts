@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/auth-guards"
 import { prisma } from "@/lib/prisma"
 import { deleteFile } from "@/lib/upload"
 import { MAX_EMBED_SIZE } from "@/lib/constants"
 import bcrypt from "bcryptjs"
+import { validatePassword } from "@/lib/validation"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user) {
+  const current = await requireUser()
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const files = await prisma.file.findMany({
-    where: { userId: (session.user as any).id, status: "ACTIVE" },
+    where: { userId: current.userId, status: "ACTIVE" },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -23,7 +24,6 @@ export async function GET() {
       downloads: true,
       views: true,
       password: true,
-      plainPassword: true,
       createdAt: true,
       embedUrl: true,
       isMediaEmbed: true,
@@ -41,9 +41,16 @@ export async function GET() {
         : undefined
 
       return {
-        ...f,
+        id: f.id,
+        originalName: f.originalName,
+        type: f.type,
+        size: f.size,
+        shareId: f.shareId,
+        downloads: f.downloads,
+        views: f.views,
+        createdAt: f.createdAt,
+        isMediaEmbed: f.isMediaEmbed,
         hasPassword: !!f.password,
-        password: f.plainPassword || undefined,
         shareUrl: `${baseUrl}/s/${f.shareId}`,
         embedUrl,
       }
@@ -52,43 +59,52 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  const session = await auth()
-  if (!session?.user) {
+  const current = await requireUser()
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
     const { fileId, password } = await request.json()
+    if (typeof fileId !== "string" || !fileId) {
+      return NextResponse.json({ error: "File ID is required" }, { status: 400 })
+    }
     
     const file = await prisma.file.findUnique({
       where: { id: fileId },
     })
 
-    if (!file || file.userId !== (session.user as any).id) {
+    if (!file || file.userId !== current.userId) {
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    // Hash password if provided
-    const hashedPassword = password ? await bcrypt.hash(password, 12) : null
-    const plainPassword = password || null
+    const cleanPassword = password === undefined || password === null || password === ""
+      ? undefined
+      : validatePassword(password)
+    if (password !== undefined && password !== null && password !== "" && !cleanPassword) {
+      return NextResponse.json({ error: "Password must be between 8 and 256 characters" }, { status: 400 })
+    }
+    const hashedPassword = cleanPassword ? await bcrypt.hash(cleanPassword, 12) : null
     
     const updatedFile = await prisma.file.update({
       where: { id: fileId },
-      data: { password: hashedPassword, plainPassword: plainPassword },
+      data: { password: hashedPassword, accessVersion: { increment: 1 } },
     })
 
     return NextResponse.json({ 
       success: true,
-      hasPassword: !!updatedFile.password
+      hasPassword: !!updatedFile.password,
+      password: cleanPassword,
     })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+  } catch (error) {
+    console.error("File password update error:", error)
+    return NextResponse.json({ error: "Unable to update file" }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await auth()
-  if (!session?.user) {
+  const current = await requireUser()
+  if (!current) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -101,12 +117,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     const results = await Promise.allSettled(
-      ids.map((id: string) => deleteFile(id, (session.user as any).id))
+      ids.map((id: string) => deleteFile(id, current.userId))
     )
     const deleted = results.filter((r) => r.status === "fulfilled").length
 
     return NextResponse.json({ success: deleted > 0, deleted })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+  } catch (error) {
+    console.error("File deletion error:", error)
+    return NextResponse.json({ error: "Unable to delete file" }, { status: 500 })
   }
 }

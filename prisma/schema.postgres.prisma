@@ -22,8 +22,10 @@ model User {
   name      String
   role      String   @default("USER")
   maxSize   Float    @default(524288000)
+  sessionVersion Int   @default(0)
   files     File[]
   albums    Album[]
+  uploadSessions UploadSession[]
   events    StatEvent[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -36,7 +38,7 @@ model File {
   type            String
   size            Float
   password        String?
-  plainPassword   String?
+  accessVersion   Int      @default(0)
   shareId         String   @unique
   userId          String?
   user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -59,7 +61,7 @@ model Album {
   name          String
   description   String?
   password      String?
-  plainPassword String?
+  accessVersion Int         @default(0)
   userId        String?
   user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   items         AlbumFile[]
@@ -98,4 +100,23 @@ model Setting {
   id    String @id @default(cuid())
   key   String @unique
   value String
+}
+
+model UploadSession {
+  id            String   @id
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalName  String
+  mimeType      String
+  expectedSize  Float
+  receivedBytes Float    @default(0)
+  nextChunk     Int      @default(0)
+  reservedBytes Float    @default(0)
+  status        String   @default("OPEN")
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([expiresAt])
 }

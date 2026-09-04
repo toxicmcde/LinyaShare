@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { findFileOnDisk } from "@/lib/file-storage";
 import { buildContentDisposition } from "@/lib/file-security";
+import { validatePassword } from "@/lib/validation";
 
 // ──────────────────────────────────────────────────────────
 // URL HELPERS
@@ -38,6 +39,10 @@ export async function createAlbum({
     throw new Error("No valid files selected");
   }
 
+  if (password !== undefined && !validatePassword(password)) {
+    throw new Error("Password must be between 8 and 256 characters");
+  }
+
   const hashedPassword = password ? await bcrypt.hash(password, 12) : undefined;
   const shareId = uuidv4();
 
@@ -47,7 +52,6 @@ export async function createAlbum({
       name,
       description: description || null,
       password: hashedPassword || null,
-      plainPassword: password || null,
       userId,
       items: {
         create: ownedFiles.map((f) => ({ fileId: f.id })),
@@ -79,12 +83,14 @@ export async function getAlbumByShareId(shareId: string) {
               originalName: true,
               type: true,
               size: true,
-              password: true,
+               password: true,
+               accessVersion: true,
               downloads: true,
               views: true,
               createdAt: true,
-              embedUrl: true,
-              isMediaEmbed: true,
+               embedUrl: true,
+               isMediaEmbed: true,
+               status: true,
             },
           },
         },
@@ -108,7 +114,8 @@ export async function getUserAlbums(userId: string) {
               originalName: true,
               type: true,
               size: true,
-              password: true,
+               password: true,
+               accessVersion: true,
               embedUrl: true,
               isMediaEmbed: true,
             },
@@ -139,10 +146,11 @@ export async function updateAlbum(
   }
 
   let password: string | null | undefined = undefined;
-  let plainPassword: string | null | undefined = undefined;
   if (data.password !== undefined) {
-    plainPassword = data.password || null;
-    password = plainPassword ? await bcrypt.hash(plainPassword, 12) : null;
+    if (data.password !== null && !validatePassword(data.password)) {
+      throw new Error("Password must be between 8 and 256 characters");
+    }
+    password = data.password ? await bcrypt.hash(data.password, 12) : null;
   }
 
   const itemsData: { create?: { fileId: string }[]; deleteMany?: { fileId: { in: string[] } } } = {};
@@ -165,7 +173,7 @@ export async function updateAlbum(
       name: data.name ?? undefined,
       description: data.description !== undefined ? data.description : undefined,
       password,
-      plainPassword,
+      accessVersion: data.password !== undefined ? { increment: 1 } : undefined,
       ...(Object.keys(itemsData).length ? { items: itemsData } : {}),
     },
     include: {
@@ -230,11 +238,12 @@ export type ZipEntry = {
  */
 export function getAlbumZipEntries(album: {
   shareId: string;
-  items: { file: { id: string; originalName: string; type: string; size: number; password: string | null } }[];
+  items: { file: { id: string; originalName: string; type: string; size: number; password: string | null; status?: string } }[];
 }): ZipEntry[] {
   const entries: ZipEntry[] = [];
 
   for (const item of album.items) {
+    if (item.file.status && item.file.status !== "ACTIVE") continue;
     if (item.file.password) continue; // individually protected → not in the ZIP
     const filePath = findFileOnDisk(item.file as any);
     if (!filePath) continue;

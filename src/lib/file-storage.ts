@@ -19,12 +19,19 @@ export interface StorageFileLike {
   userId?: string | null;
 }
 
+function resolveInside(baseDir: string, ...parts: string[]): string | null {
+  const base = path.resolve(baseDir);
+  const candidate = path.resolve(base, ...parts);
+  return candidate.startsWith(`${base}${path.sep}`) ? candidate : null;
+}
+
 /**
  * Returns the target folder for a user (uploads) and creates it.
  * Folder permissions: 0755 (no write access for others, no execute bits for files).
  */
 export async function ensureUserUploadDir(userId: string): Promise<string> {
-  const dir = path.join(UPLOAD_DIR, userId);
+  const dir = resolveInside(UPLOAD_DIR, userId);
+  if (!dir) throw new Error("Invalid user upload path");
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true, mode: 0o755 });
   }
@@ -37,17 +44,17 @@ export async function ensureUserUploadDir(userId: string): Promise<string> {
  */
 export function getUploadPath(file: StorageFileLike): string {
   if (file.userId) {
-    const userDir = path.join(UPLOAD_DIR, file.userId, file.name);
-    if (existsSync(userDir)) return userDir;
+    const userPath = resolveInside(UPLOAD_DIR, file.userId, file.name);
+    if (userPath && existsSync(userPath)) return userPath;
   }
-  return path.join(UPLOAD_DIR, file.name);
+  return resolveInside(UPLOAD_DIR, file.name) || path.join(path.resolve(UPLOAD_DIR), "__invalid_file_path__");
 }
 
 /**
  * Full path to a file in the import folder.
  */
 export function getImportPath(file: StorageFileLike): string {
-  return path.join(IMPORT_DIR, file.name);
+  return resolveInside(IMPORT_DIR, file.name) || path.join(path.resolve(IMPORT_DIR), "__invalid_file_path__");
 }
 
 /**
@@ -88,7 +95,8 @@ export async function moveImportToUploads(file: StorageFileLike, userId: string)
   }
 
   const userDir = await ensureUserUploadDir(userId);
-  const finalPath = path.join(userDir, file.name);
+  const finalPath = resolveInside(userDir, file.name);
+  if (!finalPath) throw new Error("Invalid upload file path");
 
   await rename(importPath, finalPath);
   return finalPath;

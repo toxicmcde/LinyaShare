@@ -44,8 +44,9 @@ export async function GET(
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error("Album OG error:", error)
+    return NextResponse.json({ error: "Unable to generate preview" }, { status: 500 });
   }
 }
 

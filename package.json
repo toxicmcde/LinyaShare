@@ -1,12 +1,18 @@
 {
   "name": "linyashare",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "next dev",
     "dev:host": "next dev -H 0.0.0.0",
     "test": "node --test --experimental-strip-types tests/*.test.mjs",
     "build": "next build",
+    "typecheck": "tsc --noEmit --pretty false",
+    "security:audit": "npm audit --audit-level=high",
     "start": "node .next/standalone/server.js",
     "start:dev": "next start",
     "db:push": "npx prisma db push",
@@ -19,7 +25,14 @@
     "docker:restart": "docker compose restart",
     "fonts:download": "npx tsc scripts/download-fonts.ts --module commonjs --moduleResolution node --target ES2020 --esModuleInterop --skipLibCheck --outDir .fonts-dl && node .fonts-dl/scripts/download-fonts.js",
     "egg:create": "node scripts/build-egg.mjs",
-    "setup": "npm run db:generate && npm run db:push"
+    "setup": "npm run db:generate && npm run db:push",
+    "security:migrate": "node scripts/migrate-security.mjs"
+  },
+  "overrides": {
+    "browserslist": "4.28.9",
+    "nanoid": "3.3.18",
+    "postcss": "$postcss",
+    "sharp": "$sharp"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "^1.4.0",
@@ -29,15 +42,15 @@
     "busboy": "^1.6.0",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",
-    "next": "^15.0.0",
-    "next-auth": "^5.0.0-beta.25",
+    "next": "^15.5.21",
+    "next-auth": "^5.0.0-beta.32",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "sharp": "^0.35.3",
-    "uuid": "^10.0.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@types/archiver": "^8.0.0",
@@ -48,7 +61,7 @@
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
+    "postcss": "^8.5.28",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.0"

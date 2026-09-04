@@ -150,7 +150,8 @@ nano .env
 
 ```env
 DATABASE_URL="file:./linyashare.db"
-NEXTAUTH_SECRET="u3H8gR9kL2mN5pQ7rT1vX4zA6cD9fG0jK2lM4nP6rS"
+# Generate with: openssl rand -base64 32
+NEXTAUTH_SECRET="<generated random value>"
 NEXTAUTH_URL="https://share.example.com"
 NEXT_PUBLIC_APP_URL="https://share.example.com"
 UPLOAD_DIR="/var/www/linyashare/data/uploads"

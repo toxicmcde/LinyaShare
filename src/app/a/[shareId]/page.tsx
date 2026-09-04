@@ -32,7 +32,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     // Cover = first image media for the OG preview
     // If no cover exists → use the album's own OG image (instead of the file route,
     // which returns 404 for albums)
-    const coverItem = album.items.find((i) => i.file.embedUrl && !i.file.password) || null;
+    // A protected album must not publish a direct file URL through metadata.
+    // Use the neutral album preview until the album has been unlocked.
+    const coverItem = !hasPassword
+      ? album.items.find((i) => i.file.embedUrl && !i.file.password) || null
+      : null;
     const ogImageUrl = coverItem
       ? `${baseUrl}/api/files/embed/${coverItem.file.shareId}/${encodeURIComponent(coverItem.file.originalName)}`
       : `${baseUrl}/api/og/album/${shareId}.png`;

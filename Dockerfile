@@ -50,6 +50,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
 # Full node_modules (includes the Prisma CLI + engines, required for the
 # runtime "prisma db push" step). The Next.js standalone bundle keeps
 # working alongside it.

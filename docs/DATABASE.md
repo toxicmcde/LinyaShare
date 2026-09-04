@@ -65,6 +65,7 @@ erDiagram
         String name
         String role "USER | ADMIN"
         Float maxSize "bytes (default: 500MB)"
+        Int sessionVersion "incremented to invalidate existing sessions"
         DateTime createdAt
         DateTime updatedAt
     }
@@ -76,7 +77,7 @@ erDiagram
         String type "MIME type"
         Float size "bytes"
         String password "bcrypt hashed"
-        String plainPassword "plain text (import)"
+        Int accessVersion "incremented to invalidate share grants"
         String shareId UK "UUID"
         String userId FK "nullable"
         Int downloads "counter"
@@ -123,6 +124,7 @@ The `User` model represents an account in the system.
 | `name` | `String` | Display name |
 | `role` | `String` | `"USER"` or `"ADMIN"` |
 | `maxSize` | `Float (bytes)` | Storage limit (default: 500MB) |
+| `sessionVersion` | `Int` | Invalidates existing sessions after security-sensitive changes |
 | `files` | `File[]` | Relation to uploaded files |
 | `createdAt` | `DateTime` | Account creation timestamp |
 | `updatedAt` | `DateTime` | Last update timestamp |
@@ -161,7 +163,7 @@ The `File` model represents an uploaded or imported file.
 | `type` | `String` | MIME type (`video/mp4`, `image/png`, etc.) |
 | `size` | `Float` | File size in bytes |
 | `password` | `String?` | bcrypt-hashed password (null = no password) |
-| `plainPassword` | `String?` | Plain text password (for admin display) |
+| `accessVersion` | `Int` | Invalidates existing password-grant cookies after password changes |
 | `shareId` | `String @unique` | UUID for share URLs (`/s/{shareId}`) |
 | `userId` | `String?` | Owner's user ID (null = unclaimed) |
 | `downloads` | `Int` | Download counter |
@@ -173,6 +175,8 @@ The `File` model represents an uploaded or imported file.
 
 > [!TIP]
 > The `name` field is the sanitized disk filename (UUID + extension). The `originalName` is what users see. This separation prevents path traversal attacks.
+
+Plaintext share passwords are not stored. New passwords are shown once when they are created or replaced; the database retains only the bcrypt hash.
 
 ---
 

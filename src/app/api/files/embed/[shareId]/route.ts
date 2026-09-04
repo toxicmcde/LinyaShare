@@ -24,6 +24,12 @@ export async function GET(
     if (!file) {
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
+    if (file.status !== "ACTIVE") {
+      return NextResponse.json({ error: "File not found" }, { status: 404 })
+    }
+    if (request.nextUrl.searchParams.has("password")) {
+      return NextResponse.json({ error: "Password query parameters are not supported" }, { status: 400 })
+    }
 
     // Password check: embed not available for password-protected files
     const session = await import("@/lib/auth").then(m => m.auth())
@@ -37,7 +43,8 @@ export async function GET(
     const redirectUrl = new URL(`/api/files/embed/${shareId}/${encodedFilename}`, request.url).toString()
 
     return NextResponse.redirect(redirectUrl, { status: 308 })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    console.error("File embed redirect error:", error)
+    return NextResponse.json({ error: "Unable to deliver file" }, { status: 500 })
   }
 }
