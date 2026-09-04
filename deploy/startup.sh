@@ -49,6 +49,8 @@ export PORT="${PORT:-3000}"
 export NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-http://${SERVER_IP:-localhost}:${PORT}}"
 export NEXTAUTH_URL="${NEXTAUTH_URL:-$NEXT_PUBLIC_APP_URL}"
 export AUTH_TRUST_HOST="${AUTH_TRUST_HOST:-true}"
+export MAX_UPLOAD_SIZE_BYTES="${MAX_UPLOAD_SIZE_BYTES:-5368709120}"
+export TRUSTED_PROXY="${TRUSTED_PROXY:-false}"
 export DATABASE_PROVIDER="${DATABASE_PROVIDER:-sqlite}"
 
 # ── Secure the database URL ────────────────────────────────────────────────────

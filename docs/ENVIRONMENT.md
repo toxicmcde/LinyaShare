@@ -43,6 +43,8 @@
 | `NEXT_PUBLIC_APP_URL` | Yes | `http://localhost:3000` | Public URL for share links |
 | `UPLOAD_DIR` | No | `data/uploads` | Upload storage path |
 | `IMPORT_DIR` | No | `data/import` | Import storage path |
+| `MAX_UPLOAD_SIZE_BYTES` | No | `5368709120` | Maximum size of one authenticated upload in bytes |
+| `TRUSTED_PROXY` | No | `false` | Trust forwarded client IP headers only behind a trusted reverse proxy |
 | `PORT` | No | `3000` | Application port |
 | `HOSTNAME` | No | `localhost` | Bind address |
 

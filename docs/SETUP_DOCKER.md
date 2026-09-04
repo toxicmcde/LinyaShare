@@ -217,6 +217,7 @@ environment:
   - NODE_ENV=production
   - PORT=3000
   - HOSTNAME=0.0.0.0
+  - MAX_UPLOAD_SIZE_BYTES=${MAX_UPLOAD_SIZE_BYTES:-5368709120}
   - TRUSTED_PROXY=false
 ```
 

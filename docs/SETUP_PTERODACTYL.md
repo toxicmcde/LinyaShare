@@ -142,7 +142,7 @@ bash /home/container/start.sh
 | 2 | Navigate to your Pterodactyl/FeatherPanel Admin Panel |
 | 3 | Go to Nests > Create New Egg > Import Egg |
 | 4 | Select the downloaded JSON file |
-| 5 | Configure variables (NEXTAUTH_SECRET) and save |
+| 5 | Configure `NEXTAUTH_SECRET` and review the upload/proxy variables |
 
 ### GitHub Auto-Fetch
 
@@ -154,7 +154,7 @@ The egg installation script automatically fetches from GitHub:
 | `GIT_BRANCH` | `main` | Branch to clone (e.g., `main`, `dev`) |
 | `AUTO_UPDATE` | `false` | Enable to auto-pull updates on server restart |
 
-Simply enter a `NEXTAUTH_SECRET` -- everything else is pre-configured for plug-and-play.
+Set a strong `NEXTAUTH_SECRET`. The upload-size and proxy settings have secure defaults and can be adjusted when required.
 
 ---
 
@@ -169,6 +169,10 @@ Simply enter a `NEXTAUTH_SECRET` -- everything else is pre-configured for plug-a
 | `NEXT_PUBLIC_APP_URL` | No | Auto-detected (`http://SERVER_IP:PORT`) | Public URL for share links (leave empty for auto) |
 | `NEXTAUTH_URL` | No | Same as app URL | NextAuth callback URL |
 | `AUTH_TRUST_HOST` | No | `true` | Allows auth when accessed via IP/hostname |
+| `DATABASE_PROVIDER` | Yes | `sqlite` | Database backend: `sqlite`, `mysql`, or `postgres` |
+| `DATABASE_URL` | No | Built-in SQLite database | Connection string for an external MySQL/MariaDB or PostgreSQL database |
+| `MAX_UPLOAD_SIZE_BYTES` | Yes | `5368709120` | Maximum size of one authenticated upload in bytes (5 GiB by default) |
+| `TRUSTED_PROXY` | Yes | `false` | Trust forwarded client IP headers only when the app is exclusively behind a trusted reverse proxy |
 
 ---
 
@@ -180,6 +184,8 @@ Simply enter a `NEXTAUTH_SECRET` -- everything else is pre-configured for plug-a
 | With Auto-Update | Set `AUTO_UPDATE=true` in egg variables |
 | Custom Branch | Set `GIT_BRANCH=dev` (or other branch) |
 | Domain URL | Set `NEXT_PUBLIC_APP_URL=https://share.example.com` |
+| Custom upload limit | Set `MAX_UPLOAD_SIZE_BYTES` to the desired byte limit |
+| Trusted reverse proxy | Set `TRUSTED_PROXY=true` only when all traffic comes through the trusted proxy |
 
 > [!NOTE]
 > The startup script automatically handles setup and build steps. Auto-update will only rebuild if source files changed.
