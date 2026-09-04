@@ -1,5 +1,4 @@
-import path from "path";
-import { FileTypeCategory } from "./utils";
+import type { FileTypeCategory } from "./utils";
 
 /**
  * Security helpers for file delivery.
@@ -344,14 +343,53 @@ export function buildFileHeaders(
 
 /**
  * Creates the Content-Disposition header for download or inline display.
- * Ensures correct encoding of the file name.
+ * Uses an ASCII quoted-string fallback for older clients and RFC 5987
+ * encoding for the complete Unicode name.
  */
 export function buildContentDisposition(
   fileName: string,
   disposition: "attachment" | "inline"
 ): string {
-  const encodedFilename = encodeURIComponent(fileName);
-  return `${disposition}; filename="${fileName}"; filename*=UTF-8''${encodedFilename}`;
+  // encodeURIComponent throws for unpaired UTF-16 surrogates. Replace those
+  // with U+FFFD so even malformed names stored by an import cannot break the
+  // response header.
+  let normalizedName = "";
+  for (let index = 0; index < fileName.length; index += 1) {
+    const codeUnit = fileName.charCodeAt(index);
+
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const nextCodeUnit = fileName.charCodeAt(index + 1);
+      if (nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff) {
+        normalizedName += fileName[index] + fileName[index + 1];
+        index += 1;
+      } else {
+        normalizedName += "\ufffd";
+      }
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      normalizedName += "\ufffd";
+    } else {
+      normalizedName += fileName[index];
+    }
+  }
+
+  // Control characters are invalid in HTTP field values. Removing them from
+  // both parameters also prevents a stored file name from causing HTTP 500.
+  const safeUnicodeName = normalizedName.replace(/[\u0000-\u001f\u007f-\u009f]/g, "") || "download";
+
+  // Quoted filename= is deliberately ASCII-only. Escape the two characters
+  // that have special meaning in an HTTP quoted-string.
+  const asciiFallback = safeUnicodeName
+    .replace(/[^\x20-\x7e]/gu, "_")
+    .replace(/(["\\])/g, "\\$1");
+
+  // encodeURIComponent is close to RFC 5987, but leaves these characters
+  // unescaped even though they are not valid attr-char characters.
+  const encodedFilename = encodeURIComponent(safeUnicodeName)
+    .replace(/['()*]/g, (character) =>
+      `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+    );
+
+  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodedFilename}`;
 }
 
 /**
